@@ -1,0 +1,84 @@
+Step 1: Load and Preprocess the Dataset
+
+import pandas as pd
+import numpy as np
+
+# Load dataset (replace with actual path)
+data_path = 'path_to_dataset.csv'
+data = pd.read_csv(data_path)
+
+# Display basic info about the dataset
+print(data.info())
+print(data.head())
+
+# Handling missing values (if any)
+data.fillna(method='ffill', inplace=True)
+
+Step 2: Feature Engineering For interference detection, key metrics such as Signal-to-Noise Ratio (SNR), Packet Loss, and Bandwidth usage are helpful indicators. 
+We'll engineer features based on these metrics and create an interference label if it’s not present.
+
+# Example of feature engineering: Generating a moving average for SNR as a feature
+data['SNR_MA'] = data['SNR'].rolling(window=5).mean()
+
+# Create a label for interference based on thresholds
+# This is just an example threshold, adjust based on dataset characteristics
+data['Interference'] = np.where(data['SNR'] < threshold_value, 1, 0)
+
+print(data[['SNR', 'SNR_MA', 'Interference']].head())
+
+Step 3: Model Training
+Once our dataset is ready, we’ll train a model. Since we are dealing with time-series data, an LSTM (Long Short-Term Memory) model can be suitable. 
+This model will use past data to predict whether there’s interference.
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
+from tensorflow.keras.utils import to_categorical
+
+# Split data into train and test sets
+X = data[['SNR_MA', 'PacketLoss', 'Latency']].values
+y = to_categorical(data['Interference'].values)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Reshape for LSTM [samples, time steps, features]
+X_train = X_train.reshape((X_train.shape[0], 1, X_train.shape[1]))
+X_test = X_test.reshape((X_test.shape[0], 1, X_test.shape[1]))
+
+# Build LSTM model
+model = Sequential([
+    LSTM(64, input_shape=(X_train.shape[1], X_train.shape[2])),
+    Dense(32, activation='relu'),
+    Dense(y_train.shape[1], activation='softmax')
+])
+
+model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+# Train model
+history = model.fit(X_train, y_train, epochs=20, batch_size=32, validation_data=(X_test, y_test))
+
+# Evaluate model
+loss, accuracy = model.evaluate(X_test, y_test)
+print(f"Model Accuracy: {accuracy:.2f}")
+
+Step 4: Model Evaluation and Testing After training, it’s crucial to test the model on new data to confirm its ability to detect interference accurately.
+# Test the model and get predictions
+predictions = model.predict(X_test)
+
+# Convert predictions to binary interference labels
+predicted_interference = np.argmax(predictions, axis=1)
+
+# Measure accuracy and visualize results
+from sklearn.metrics import accuracy_score, confusion_matrix
+print("Test Accuracy:", accuracy_score(y_test.argmax(axis=1), predicted_interference))
+print("Confusion Matrix:\n", confusion_matrix(y_test.argmax(axis=1), predicted_interference))
+
+Step 5: Decision-Making Logic for Channel Switching To implement channel switching, you could introduce a ranking for channels based on interference levels.
+Once interference is detected, the system should ideally recommend or automatically switch to the channel with the lowest interference.
+# Channel ranking based on interference levels
+def recommend_channel(interference_levels):
+    # Sort channels by interference; lower values indicate less interference
+    recommended_channel = interference_levels.idxmin()
+    print(f"Switching to channel: {recommended_channel}")
+    return recommended_channel
+
